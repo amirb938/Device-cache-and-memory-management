@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مدیریت کش و حافظه دستگاه</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .card {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border: none;
+            margin-bottom: 20px;
+        }
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+        }
+        .btn-success {
+            background: linear-gradient(135deg, #56ab2f 0%, #a8e6cf 100%);
+            border: none;
+        }
+        .btn-danger {
+            background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
+            border: none;
+        }
+        .btn-warning {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            border: none;
+        }
+        .storage-monitor {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .progress {
+            height: 25px;
+            border-radius: 15px;
+        }
+        .progress-bar {
+            border-radius: 15px;
+        }
+        .table {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .alert {
+            border: none;
+            border-radius: 10px;
+        }
+        .device-selector {
+            margin-bottom: 20px;
+        }
+        .loading {
+            display: none;
+        }
+        .spinner-border-sm {
+            width: 1rem;
+            height: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid py-4">
+        <div class="row">
+            <div class="col-12">
+                <h1 class="text-center mb-4">
+                    <i class="fas fa-mobile-alt"></i>
+                    مدیریت کش و حافظه دستگاه
+                </h1>
+            </div>
+        </div>
+
+        <!-- Device Selector -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card device-selector">
+                    <div class="card-header">
+                        <h5><i class="fas fa-list"></i> انتخاب دستگاه</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <select class="form-select" id="deviceSelect">
+                                    <option value="">انتخاب دستگاه...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <button class="btn btn-primary" onclick="loadDevices()">
+                                    <i class="fas fa-sync-alt"></i> بارگذاری دستگاه‌ها
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Real-time Storage Monitor -->
+        <div class="row">
+            <div class="col-12">
+                <div class="storage-monitor">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <h4><i class="fas fa-chart-pie"></i> مانیتور لحظه‌ای حافظه</h4>
+                            <div id="storageInfo">
+                                <p>برای نمایش اطلاعات حافظه، ابتدا دستگاه را انتخاب کنید و مانیتورینگ را شروع کنید.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <button class="btn btn-success" id="startMonitoring" onclick="startMonitoring()" style="display: none;">
+                                <i class="fas fa-play"></i> شروع مانیتورینگ
+                            </button>
+                            <button class="btn btn-danger" id="stopMonitoring" onclick="stopMonitoring()" style="display: none;">
+                                <i class="fas fa-stop"></i> توقف مانیتورینگ
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cache Management -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-database"></i> پر کردن کش</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">تعداد اپلیکیشن:</label>
+                            <input type="number" class="form-control" id="packageCount" value="10" min="1" max="100">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">اندازه فایل (مگابایت):</label>
+                            <input type="number" class="form-control" id="fileSize" value="5" min="1" max="1000">
+                        </div>
+                        <button class="btn btn-primary w-100" onclick="fillCache()">
+                            <span class="loading">
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            </span>
+                            پر کردن کش
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-calculator"></i> محاسبه کش</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">فیلتر نام پکیج:</label>
+                            <input type="text" class="form-control" id="packageFilter" placeholder="مثال: com.android" value=".">
+                        </div>
+                        <button class="btn btn-success w-100" onclick="calculateCache()">
+                            <span class="loading">
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            </span>
+                            محاسبه کش
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Storage Management -->
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-hdd"></i> پر کردن حافظه</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">اندازه (مگابایت):</label>
+                            <input type="number" class="form-control" id="storageSize" value="100" min="1" max="10000">
+                        </div>
+                        <button class="btn btn-warning w-100" onclick="fillStorage()">
+                            <span class="loading">
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            </span>
+                            پر کردن حافظه
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-broom"></i> پاک کردن حافظه</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">فایل‌های پرکننده حافظه را پاک می‌کند</p>
+                        <button class="btn btn-danger w-100" onclick="cleanStorage()">
+                            <span class="loading">
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            </span>
+                            پاک کردن
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-info-circle"></i> اطلاعات حافظه</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">نمایش اطلاعات فعلی حافظه</p>
+                        <button class="btn btn-info w-100" onclick="getFreeStorage()">
+                            <span class="loading">
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            </span>
+                            دریافت اطلاعات
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-list-alt"></i> نتایج</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="results"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Initialize Socket.IO
+        const socket = io();
+        
+        // Global variables
+        let selectedDevice = '';
+        let monitoringActive = false;
+
+        // Socket.IO event handlers
+        socket.on('connect', function() {
+            console.log('Connected to server');
+        });
+
+        socket.on('storage_update', function(data) {
+            updateStorageDisplay(data);
+        });
+
+        socket.on('monitoring_started', function(data) {
+            showAlert('success', data.message);
+            document.getElementById('startMonitoring').style.display = 'none';
+            document.getElementById('stopMonitoring').style.display = 'inline-block';
+            monitoringActive = true;
+        });
+
+        socket.on('monitoring_stopped', function(data) {
+            showAlert('info', data.message);
+            document.getElementById('startMonitoring').style.display = 'inline-block';
+            document.getElementById('stopMonitoring').style.display = 'none';
+            monitoringActive = false;
+        });
+
+        socket.on('monitoring_error', function(data) {
+            showAlert('danger', 'خطا در مانیتورینگ: ' + data.error);
+            monitoringActive = false;
+        });
+
+        // Load devices
+        function loadDevices() {
+            fetch('/api/devices')
+                .then(response => response.json())
+                .then(data => {
+                    const select = document.getElementById('deviceSelect');
+                    select.innerHTML = '<option value="">انتخاب دستگاه...</option>';
+                    
+                    if (data.success && data.devices.length > 0) {
+                        data.devices.forEach(device => {
+                            const option = document.createElement('option');
+                            option.value = device;
+                            option.textContent = device;
+                            select.appendChild(option);
+                        });
+                        showAlert('success', `${data.devices.length} دستگاه پیدا شد`);
+                    } else {
+                        showAlert('warning', 'هیچ دستگاهی پیدا نشد');
+                    }
+                })
+                .catch(error => {
+                    showAlert('danger', 'خطا در بارگذاری دستگاه‌ها: ' + error.message);
+                });
+        }
+
+        // Device selection change
+        document.getElementById('deviceSelect').addEventListener('change', function() {
+            selectedDevice = this.value;
+            if (selectedDevice) {
+                document.getElementById('startMonitoring').style.display = 'inline-block';
+                showAlert('info', `دستگاه ${selectedDevice} انتخاب شد`);
+            } else {
+                document.getElementById('startMonitoring').style.display = 'none';
+                document.getElementById('stopMonitoring').style.display = 'none';
+            }
+        });
+
+        // Start monitoring
+        function startMonitoring() {
+            if (!selectedDevice) {
+                showAlert('warning', 'ابتدا دستگاه را انتخاب کنید');
+                return;
+            }
+            socket.emit('start_monitoring', {device: selectedDevice});
+        }
+
+        // Stop monitoring
+        function stopMonitoring() {
+            socket.emit('stop_monitoring');
+        }
+
+        // Update storage display
+        function updateStorageDisplay(data) {
+            const storageInfo = document.getElementById('storageInfo');
+            const usagePercent = data.usage_percent;
+            
+            storageInfo.innerHTML = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>اطلاعات حافظه</h6>
+                        <p><strong>کل:</strong> ${data.total_mb} MB</p>
+                        <p><strong>استفاده شده:</strong> ${data.used_mb} MB</p>
+                        <p><strong>آزاد:</strong> ${data.free_mb} MB</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>نمودار استفاده</h6>
+                        <div class="progress">
+                            <div class="progress-bar ${getProgressBarClass(usagePercent)}" 
+                                 role="progressbar" style="width: ${usagePercent}%">
+                                ${usagePercent}%
+                            </div>
+                        </div>
+                        <small class="text-light">آخرین بروزرسانی: ${new Date(data.timestamp).toLocaleTimeString('fa-IR')}</small>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Get progress bar class based on usage percentage
+        function getProgressBarClass(percent) {
+            if (percent < 50) return 'bg-success';
+            if (percent < 80) return 'bg-warning';
+            return 'bg-danger';
+        }
+
+        // Fill cache
+        function fillCache() {
+            if (!selectedDevice) {
+                showAlert('warning', 'ابتدا دستگاه را انتخاب کنید');
+                return;
+            }
+
+            const packageCount = document.getElementById('packageCount').value;
+            const fileSize = document.getElementById('fileSize').value;
+
+            showLoading('fillCache');
+            
+            fetch('/api/cache/fill', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    device: selectedDevice,
+                    package_count: packageCount,
+                    file_size_mb: fileSize
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading('fillCache');
+                if (data.success) {
+                    showAlert('success', data.message);
+                } else {
+                    showAlert('danger', data.error);
+                }
+            })
+            .catch(error => {
+                hideLoading('fillCache');
+                showAlert('danger', 'خطا: ' + error.message);
+            });
+        }
+
+        // Calculate cache
+        function calculateCache() {
+            if (!selectedDevice) {
+                showAlert('warning', 'ابتدا دستگاه را انتخاب کنید');
+                return;
+            }
+
+            const packageFilter = document.getElementById('packageFilter').value;
+
+            showLoading('calculateCache');
+            
+            fetch('/api/cache/calculate', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    package_filter: packageFilter
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading('calculateCache');
+                if (data.success) {
+                    displayCacheResults(data);
+                } else {
+                    showAlert('danger', data.error);
+                }
+            })
+            .catch(error => {
+                hideLoading('calculateCache');
+                showAlert('danger', 'خطا: ' + error.message);
+            });
+        }
+
+        // Display cache results
+        function displayCacheResults(data) {
+            const results = document.getElementById('results');
+            let html = `
+                <h6>نتایج محاسبه کش</h6>
+                <div class="alert alert-info">
+                    <strong>تعداد اپلیکیشن:</strong> ${data.package_count}<br>
+                    <strong>کل حجم کش:</strong> ${data.total_size_mb} MB
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>نام پکیج</th>
+                                <th>حجم کش (KB)</th>
+                                <th>حجم کش (MB)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            data.packages.slice(0, 20).forEach(pkg => {
+                html += `
+                    <tr>
+                        <td>${pkg.package}</td>
+                        <td>${pkg.size_kb}</td>
+                        <td>${pkg.size_mb}</td>
+                    </tr>
+                `;
+            });
+            
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            if (data.packages.length > 20) {
+                html += `<p class="text-muted">فقط 20 مورد اول نمایش داده شده است.</p>`;
+            }
+            
+            results.innerHTML = html;
+        }
+
+        // Fill storage
+        function fillStorage() {
+            if (!selectedDevice) {
+                showAlert('warning', 'ابتدا دستگاه را انتخاب کنید');
+                return;
+            }
+
+            const size = document.getElementById('storageSize').value;
+
+            showLoading('fillStorage');
+            
+            fetch('/api/storage/fill', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    device: selectedDevice,
+                    size_mb: size
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading('fillStorage');
+                if (data.success) {
+                    showAlert('success', data.message);
+                } else {
+                    showAlert('danger', data.error);
+                }
+            })
+            .catch(error => {
+                hideLoading('fillStorage');
+                showAlert('danger', 'خطا: ' + error.message);
+            });
+        }
+
+        // Clean storage
+        function cleanStorage() {
+            if (!selectedDevice) {
+                showAlert('warning', 'ابتدا دستگاه را انتخاب کنید');
+                return;
+            }
+
+            showLoading('cleanStorage');
+            
+            fetch('/api/storage/clean', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    device: selectedDevice
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading('cleanStorage');
+                if (data.success) {
+                    showAlert('success', data.message);
+                } else {
+                    showAlert('danger', data.error);
+                }
+            })
+            .catch(error => {
+                hideLoading('cleanStorage');
+                showAlert('danger', 'خطا: ' + error.message);
+            });
+        }
+
+        // Get free storage
+        function getFreeStorage() {
+            if (!selectedDevice) {
+                showAlert('warning', 'ابتدا دستگاه را انتخاب کنید');
+                return;
+            }
+
+            showLoading('getFreeStorage');
+            
+            fetch('/api/storage/free', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    device: selectedDevice
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading('getFreeStorage');
+                if (data.success) {
+                    displayStorageInfo(data.storage);
+                } else {
+                    showAlert('danger', data.error);
+                }
+            })
+            .catch(error => {
+                hideLoading('getFreeStorage');
+                showAlert('danger', 'خطا: ' + error.message);
+            });
+        }
+
+        // Display storage info
+        function displayStorageInfo(storage) {
+            const results = document.getElementById('results');
+            const usagePercent = storage.usage_percent;
+            
+            results.innerHTML = `
+                <h6>اطلاعات حافظه دستگاه</h6>
+                <div class="alert alert-info">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>کل حافظه:</strong> ${storage.total_mb} MB</p>
+                            <p><strong>استفاده شده:</strong> ${storage.used_mb} MB</p>
+                            <p><strong>آزاد:</strong> ${storage.free_mb} MB</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>درصد استفاده:</strong> ${usagePercent}%</p>
+                            <div class="progress">
+                                <div class="progress-bar ${getProgressBarClass(usagePercent)}" 
+                                     role="progressbar" style="width: ${usagePercent}%">
+                                    ${usagePercent}%
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Utility functions
+        function showAlert(type, message) {
+            const results = document.getElementById('results');
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            results.insertBefore(alertDiv, results.firstChild);
+            
+            // Auto dismiss after 5 seconds
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 5000);
+        }
+
+        function showLoading(buttonId) {
+            const button = event.target;
+            const loading = button.querySelector('.loading');
+            if (loading) {
+                loading.style.display = 'inline-block';
+                button.disabled = true;
+            }
+        }
+
+        function hideLoading(buttonId) {
+            const buttons = document.querySelectorAll('button');
+            buttons.forEach(button => {
+                const loading = button.querySelector('.loading');
+                if (loading) {
+                    loading.style.display = 'none';
+                    button.disabled = false;
+                }
+            });
+        }
+
+        // Load devices on page load
+        window.onload = function() {
+            loadDevices();
+        };
+    </script>
+</body>
+</html>
