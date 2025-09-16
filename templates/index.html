@@ -135,12 +135,17 @@
 
         <!-- Cache Management -->
         <div class="row">
-            <div class="col-md-6">
+            <div class="col-md-4">
                 <div class="card">
                     <div class="card-header">
                         <h5><i class="fas fa-database"></i> پر کردن کش</h5>
                     </div>
                     <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">کلمه کلیدی (اختیاری):</label>
+                            <input type="text" class="form-control" id="fillKeyword" placeholder="مثال: com.android یا google">
+                            <small class="text-muted">فقط اپلیکیشن‌هایی که نام آن‌ها شامل این کلمه است انتخاب می‌شوند</small>
+                        </div>
                         <div class="mb-3">
                             <label class="form-label">تعداد اپلیکیشن:</label>
                             <input type="number" class="form-control" id="packageCount" value="10" min="1" max="100">
@@ -159,7 +164,7 @@
                 </div>
             </div>
 
-            <div class="col-md-6">
+            <div class="col-md-4">
                 <div class="card">
                     <div class="card-header">
                         <h5><i class="fas fa-calculator"></i> محاسبه کش</h5>
@@ -178,6 +183,44 @@
                     </div>
                 </div>
             </div>
+
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-trash-alt"></i> پاک کردن کش</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">پاک کردن کش با فیلترهای دلخواه</p>
+                        <div class="mb-3">
+                            <label class="form-label">شامل نام پکیج (include):</label>
+                            <input type="text" class="form-control" id="clearInclude" placeholder="مثال: com.android">
+                            <small class="text-muted">فقط پکیج‌هایی که این عبارت را دارند</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">حذف نام پکیج (exclude):</label>
+                            <input type="text" class="form-control" id="clearExclude" placeholder="مثال: google">
+                            <small class="text-muted">پکیج‌هایی که این عبارت را دارند حذف می‌شوند</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">حداقل اندازه کش (MB):</label>
+                            <input type="number" class="form-control" id="minCacheSize" placeholder="مثال: 10" min="0">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">حداکثر اندازه کش (MB):</label>
+                            <input type="number" class="form-control" id="maxCacheSize" placeholder="مثال: 200" min="0">
+                        </div>
+                        <div class="alert alert-warning">
+                            <small><i class="fas fa-exclamation-triangle"></i> این عمل تمام فایل‌های کش را حذف می‌کند</small>
+                        </div>
+                        <button class="btn btn-danger w-100" onclick="clearAllCache()">
+                            <span class="loading">
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            </span>
+                            پاک کردن کش همه اپ‌ها
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Storage Management -->
@@ -188,6 +231,11 @@
                         <h5><i class="fas fa-hdd"></i> پر کردن حافظه</h5>
                     </div>
                     <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">تعداد فایل‌ها:</label>
+                            <input type="number" class="form-control" id="storageCount" value="1" min="1" max="100">
+                            <small class="text-muted">چند فایل پرکننده با این اندازه ایجاد شود</small>
+                        </div>
                         <div class="mb-3">
                             <label class="form-label">اندازه (مگابایت):</label>
                             <input type="number" class="form-control" id="storageSize" value="100" min="1" max="10000">
@@ -381,6 +429,7 @@
                 return;
             }
 
+            const keyword = document.getElementById('fillKeyword').value;
             const packageCount = document.getElementById('packageCount').value;
             const fileSize = document.getElementById('fileSize').value;
 
@@ -391,6 +440,7 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
                     device: selectedDevice,
+                    keyword: keyword,
                     package_count: packageCount,
                     file_size_mb: fileSize
                 })
@@ -400,6 +450,33 @@
                 hideLoading('fillCache');
                 if (data.success) {
                     showAlert('success', data.message);
+                    
+                    // Display detailed results
+                    const results = document.getElementById('results');
+                    let html = `
+                        <h6>نتایج پر کردن کش</h6>
+                        <div class="alert alert-success">
+                            <strong>تعداد اپلیکیشن‌های پر شده:</strong> ${data.filled_count}<br>
+                            <strong>تعداد کل اپلیکیشن‌های فیلتر شده:</strong> ${data.total_filtered_packages}
+                    `;
+                    
+                    if (data.keyword_used) {
+                        html += `<br><strong>کلمه کلیدی استفاده شده:</strong> "${data.keyword_used}"`;
+                    }
+                    
+                    html += `</div>`;
+                    
+                    if (data.filled_count < data.total_filtered_packages) {
+                        html += `
+                            <div class="alert alert-info">
+                                <small><i class="fas fa-info-circle"></i> 
+                                فقط ${data.filled_count} اپلیکیشن از ${data.total_filtered_packages} اپلیکیشن موجود انتخاب شد
+                                </small>
+                            </div>
+                        `;
+                    }
+                    
+                    results.innerHTML = html;
                 } else {
                     showAlert('danger', data.error);
                 }
@@ -495,6 +572,7 @@
             }
 
             const size = document.getElementById('storageSize').value;
+            const count = document.getElementById('storageCount').value;
 
             showLoading('fillStorage');
             
@@ -503,7 +581,8 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
                     device: selectedDevice,
-                    size_mb: size
+                    size_mb: size,
+                    count: count
                 })
             })
             .then(response => response.json())
@@ -579,6 +658,69 @@
             })
             .catch(error => {
                 hideLoading('getFreeStorage');
+                showAlert('danger', 'خطا: ' + error.message);
+            });
+        }
+
+        // Clear all cache
+        function clearAllCache() {
+            if (!selectedDevice) {
+                showAlert('warning', 'ابتدا دستگاه را انتخاب کنید');
+                return;
+            }
+
+            // Show confirmation dialog
+            if (!confirm('آیا مطمئن هستید که می‌خواهید کش تمام اپلیکیشن‌ها را پاک کنید؟\nاین عمل غیرقابل بازگشت است.')) {
+                return;
+            }
+
+            showLoading('clearAllCache');
+            
+            fetch('/api/cache/clear_all', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    device: selectedDevice,
+                    include_filter: document.getElementById('clearInclude').value || '',
+                    exclude_filter: document.getElementById('clearExclude').value || '',
+                    min_cache_mb: document.getElementById('minCacheSize').value ? parseInt(document.getElementById('minCacheSize').value, 10) : null,
+                    max_cache_mb: document.getElementById('maxCacheSize').value ? parseInt(document.getElementById('maxCacheSize').value, 10) : null
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading('clearAllCache');
+                if (data.success) {
+                    showAlert('success', data.message);
+                    
+                    // Display detailed results
+                    const results = document.getElementById('results');
+                    let html = `
+                        <h6>نتایج پاک کردن کش</h6>
+                        <div class="alert alert-success">
+                            <strong>تعداد اپلیکیشن‌های پردازش شده:</strong> ${data.total_packages}<br>
+                            <strong>تعداد اپلیکیشن‌های موفق:</strong> ${data.cleared_count}<br>
+                            <strong>تعداد اپلیکیشن‌های ناموفق:</strong> ${data.failed_packages.length}
+                        </div>
+                    `;
+                    
+                    if (data.failed_packages.length > 0) {
+                        html += `
+                            <div class="alert alert-warning">
+                                <strong>اپلیکیشن‌های ناموفق:</strong><br>
+                                ${data.failed_packages.map(pkg => `• ${pkg}`).join('<br>')}
+                                ${data.failed_packages.length > 10 ? '<br><small>...</small>' : ''}
+                            </div>
+                        `;
+                    }
+                    
+                    results.innerHTML = html;
+                } else {
+                    showAlert('danger', data.error);
+                }
+            })
+            .catch(error => {
+                hideLoading('clearAllCache');
                 showAlert('danger', 'خطا: ' + error.message);
             });
         }

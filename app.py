@@ -40,12 +40,44 @@ def api_fill_cache():
         device = data.get('device')
         package_count = int(data.get('package_count', 10))
         file_size_mb = int(data.get('file_size_mb', 5))
+        keyword = data.get('keyword', '')
         
         if not device:
             return jsonify({'success': False, 'error': 'Device not specified'})
         
-        fill_cache(device, package_count, file_size_mb)
-        return jsonify({'success': True, 'message': f'Cache filled for {package_count} packages'})
+        # Get packages with keyword filter
+        from calculate_cache import get_packages
+        all_packages = get_packages(keyword) if keyword else get_packages('.')
+        
+        if not all_packages:
+            return jsonify({'success': False, 'error': f'No packages found matching keyword "{keyword}"'})
+        
+        # Select random packages from filtered list
+        import random
+        selected_packages = random.sample(all_packages, min(package_count, len(all_packages)))
+        
+        # Fill cache for selected packages
+        from cache_fill import create_file_in_cache
+        filled_count = 0
+        
+        for package in selected_packages:
+            try:
+                create_file_in_cache(device, package, file_size_mb)
+                filled_count += 1
+            except Exception as e:
+                print(f"Failed to fill cache for {package}: {e}")
+        
+        message = f'Cache filled for {filled_count} packages'
+        if keyword:
+            message += f' (filtered by keyword: "{keyword}")'
+        
+        return jsonify({
+            'success': True, 
+            'message': message,
+            'filled_count': filled_count,
+            'total_filtered_packages': len(all_packages),
+            'keyword_used': keyword
+        })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
@@ -94,12 +126,16 @@ def api_fill_storage():
         data = request.get_json()
         device = data.get('device')
         size_mb = int(data.get('size_mb', 100))
+        count = int(data.get('count', 1))
         
         if not device:
             return jsonify({'success': False, 'error': 'Device not specified'})
         
-        fill_storage(device, size_mb)
-        return jsonify({'success': True, 'message': f'Storage filled with {size_mb}MB'})
+        count = max(1, min(count, 100))
+        for _ in range(count):
+            fill_storage(device, size_mb)
+        total_mb = size_mb * count
+        return jsonify({'success': True, 'message': f'Storage filled with {count} file(s) x {size_mb}MB = {total_mb}MB'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
@@ -160,6 +196,99 @@ def api_get_free_storage():
                 })
         
         return jsonify({'success': False, 'error': 'Could not parse storage information'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/cache/clear_all', methods=['POST'])
+def api_clear_all_cache():
+    """Clear cache for all applications"""
+    try:
+        data = request.get_json()
+        device = data.get('device')
+        include_filter = (data.get('include_filter') or '').strip()
+        exclude_filter = (data.get('exclude_filter') or '').strip()
+        min_cache_mb = data.get('min_cache_mb')
+        max_cache_mb = data.get('max_cache_mb')
+        
+        if not device:
+            return jsonify({'success': False, 'error': 'Device not specified'})
+        
+        # Enable root access
+        enable_root()
+        
+        # Get all packages
+        packages = get_packages('.')
+
+        # Apply include/exclude name filters
+        if include_filter:
+            packages = [p for p in packages if include_filter in p]
+        if exclude_filter:
+            packages = [p for p in packages if exclude_filter not in p]
+        
+        if not packages:
+            return jsonify({'success': False, 'error': 'No packages found after applying filters'})
+        
+        cleared_count = 0
+        failed_packages = []
+        skipped_packages = []
+        
+        # Clear cache for each package
+        from storage_fill_clean import run_adb
+        
+        for package in packages:
+            try:
+                # Size-based filtering if requested
+                if min_cache_mb is not None or max_cache_mb is not None:
+                    size_kb = get_cache_size(package)
+                    size_mb = size_kb / 1024.0
+                    if min_cache_mb is not None and size_mb < float(min_cache_mb):
+                        skipped_packages.append(f"{package} (size {round(size_mb,2)} MB < min {min_cache_mb} MB)")
+                        continue
+                    if max_cache_mb is not None and size_mb > float(max_cache_mb):
+                        skipped_packages.append(f"{package} (size {round(size_mb,2)} MB > max {max_cache_mb} MB)")
+                        continue
+
+                # Clear cache from both directories
+                cache_paths = [
+                    f"/data/data/{package}/cache",
+                    f"/data/user/0/{package}/cache"
+                ]
+                
+                for cache_path in cache_paths:
+                    # Remove all files in cache directory
+                    cmd = f"rm -rf {cache_path}/*"
+                    out, err = run_adb(device, ["shell", cmd])
+                    
+                    if err and "No such file or directory" not in err:
+                        print(f"Warning clearing {cache_path}: {err}")
+                
+                cleared_count += 1
+                
+            except Exception as e:
+                failed_packages.append(f"{package}: {str(e)}")
+                print(f"Failed to clear cache for {package}: {e}")
+        
+        result_message = f"Cache cleared for {cleared_count} applications"
+        if failed_packages:
+            result_message += f". Failed for {len(failed_packages)} applications"
+        if skipped_packages:
+            result_message += f". Skipped {len(skipped_packages)} applications by filters"
+        
+        return jsonify({
+            'success': True,
+            'message': result_message,
+            'cleared_count': cleared_count,
+            'total_packages': len(packages),
+            'failed_packages': failed_packages[:10],  # Limit to first 10 failures
+            'skipped_packages': skipped_packages[:10],
+            'filters': {
+                'include_filter': include_filter,
+                'exclude_filter': exclude_filter,
+                'min_cache_mb': min_cache_mb,
+                'max_cache_mb': max_cache_mb
+            }
+        })
+        
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
