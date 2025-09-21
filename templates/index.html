@@ -133,6 +133,37 @@
             </div>
         </div>
 
+        <!-- Real-time Cache Monitor -->
+        <div class="row">
+            <div class="col-12">
+                <div class="storage-monitor" style="background: linear-gradient(135deg, #56ab2f 0%, #a8e6cf 100%);">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h4><i class="fas fa-chart-line"></i> مانیتور لحظه‌ای کش اپلیکیشن</h4>
+                            <div id="cacheInfo">
+                                <p>برای نمایش اطلاعات کش، ابتدا دستگاه و نام پکیج اپلیکیشن را وارد کنید.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label text-white">نام پکیج اپلیکیشن:</label>
+                                <input type="text" class="form-control" id="packageNameInput" placeholder="مثال: com.android.chrome">
+                                <small class="text-white-50">نام کامل پکیج اپلیکیشن مورد نظر</small>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-success" id="startCacheMonitoring" onclick="startCacheMonitoring()" style="display: none;">
+                                    <i class="fas fa-play"></i> شروع مانیتورینگ کش
+                                </button>
+                                <button class="btn btn-danger" id="stopCacheMonitoring" onclick="stopCacheMonitoring()" style="display: none;">
+                                    <i class="fas fa-stop"></i> توقف مانیتورینگ کش
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Cache Management -->
         <div class="row">
             <div class="col-md-4">
@@ -308,6 +339,7 @@
         // Global variables
         let selectedDevice = '';
         let monitoringActive = false;
+        let cacheMonitoringActive = false;
 
         // Socket.IO event handlers
         socket.on('connect', function() {
@@ -335,6 +367,30 @@
         socket.on('monitoring_error', function(data) {
             showAlert('danger', 'خطا در مانیتورینگ: ' + data.error);
             monitoringActive = false;
+        });
+
+        // Cache monitoring event handlers
+        socket.on('cache_update', function(data) {
+            updateCacheDisplay(data);
+        });
+
+        socket.on('cache_monitoring_started', function(data) {
+            showAlert('success', data.message);
+            document.getElementById('startCacheMonitoring').style.display = 'none';
+            document.getElementById('stopCacheMonitoring').style.display = 'inline-block';
+            cacheMonitoringActive = true;
+        });
+
+        socket.on('cache_monitoring_stopped', function(data) {
+            showAlert('info', data.message);
+            document.getElementById('startCacheMonitoring').style.display = 'inline-block';
+            document.getElementById('stopCacheMonitoring').style.display = 'none';
+            cacheMonitoringActive = false;
+        });
+
+        socket.on('cache_monitoring_error', function(data) {
+            showAlert('danger', 'خطا در مانیتورینگ کش: ' + data.error);
+            cacheMonitoringActive = false;
         });
 
         // Load devices
@@ -367,10 +423,13 @@
             selectedDevice = this.value;
             if (selectedDevice) {
                 document.getElementById('startMonitoring').style.display = 'inline-block';
+                document.getElementById('startCacheMonitoring').style.display = 'inline-block';
                 showAlert('info', `دستگاه ${selectedDevice} انتخاب شد`);
             } else {
                 document.getElementById('startMonitoring').style.display = 'none';
                 document.getElementById('stopMonitoring').style.display = 'none';
+                document.getElementById('startCacheMonitoring').style.display = 'none';
+                document.getElementById('stopCacheMonitoring').style.display = 'none';
             }
         });
 
@@ -386,6 +445,30 @@
         // Stop monitoring
         function stopMonitoring() {
             socket.emit('stop_monitoring');
+        }
+
+        // Start cache monitoring
+        function startCacheMonitoring() {
+            if (!selectedDevice) {
+                showAlert('warning', 'ابتدا دستگاه را انتخاب کنید');
+                return;
+            }
+
+            const packageName = document.getElementById('packageNameInput').value.trim();
+            if (!packageName) {
+                showAlert('warning', 'لطفاً نام پکیج اپلیکیشن را وارد کنید');
+                return;
+            }
+
+            socket.emit('start_cache_monitoring', {
+                device: selectedDevice,
+                package_name: packageName
+            });
+        }
+
+        // Stop cache monitoring
+        function stopCacheMonitoring() {
+            socket.emit('stop_cache_monitoring');
         }
 
         // Update storage display
@@ -410,6 +493,29 @@
                             </div>
                         </div>
                         <small class="text-light">آخرین بروزرسانی: ${new Date(data.timestamp).toLocaleTimeString('fa-IR')}</small>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Update cache display
+        function updateCacheDisplay(data) {
+            const cacheInfo = document.getElementById('cacheInfo');
+            
+            cacheInfo.innerHTML = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>اطلاعات کش اپلیکیشن</h6>
+                        <p><strong>نام پکیج:</strong> ${data.package_name}</p>
+                        <p><strong>حجم کش:</strong> ${data.size_kb} KB (${data.size_mb} MB)</p>
+                        <p><strong>دستگاه:</strong> ${data.device}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>وضعیت مانیتورینگ</h6>
+                        <div class="alert alert-success text-dark">
+                            <i class="fas fa-check-circle"></i> مانیتورینگ فعال
+                        </div>
+                        <small class="text-white-50">آخرین بروزرسانی: ${new Date(data.timestamp).toLocaleTimeString('fa-IR')}</small>
                     </div>
                 </div>
             `;

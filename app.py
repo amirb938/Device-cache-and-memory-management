@@ -16,8 +16,9 @@ from cache_fill import list_devices, fill_cache
 from calculate_cache import get_packages, get_cache_size, enable_root
 from storage_fill_clean import fill_storage, clean_storage, show_free_storage
 
-# Global variable to control monitoring
+# Global variables to control monitoring
 monitoring_active = False
+cache_monitoring_active = False
 
 @app.route('/')
 def index():
@@ -298,8 +299,9 @@ def handle_connect():
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    global monitoring_active
+    global monitoring_active, cache_monitoring_active
     monitoring_active = False
+    cache_monitoring_active = False
     print('Client disconnected')
 
 @socketio.on('start_monitoring')
@@ -357,6 +359,61 @@ def handle_stop_monitoring():
     global monitoring_active
     monitoring_active = False
     emit('monitoring_stopped', {'message': 'Storage monitoring stopped'})
+
+@socketio.on('start_cache_monitoring')
+def handle_start_cache_monitoring(data):
+    global cache_monitoring_active
+    device = data.get('device')
+    package_name = data.get('package_name')
+    
+    if not device:
+        emit('cache_monitoring_error', {'error': 'Device not specified'})
+        return
+    
+    if not package_name:
+        emit('cache_monitoring_error', {'error': 'Package name not specified'})
+        return
+    
+    cache_monitoring_active = True
+    
+    def monitor_cache():
+        while cache_monitoring_active:
+            try:
+                # Enable root access for cache monitoring
+                enable_root()
+                
+                # Get cache size for the specific package
+                size_kb = get_cache_size(package_name)
+                size_mb = round(size_kb / 1024, 2)
+                
+                cache_data = {
+                    'timestamp': datetime.now().isoformat(),
+                    'package_name': package_name,
+                    'size_kb': size_kb,
+                    'size_mb': size_mb,
+                    'device': device
+                }
+                
+                socketio.emit('cache_update', cache_data)
+                
+            except Exception as e:
+                socketio.emit('cache_monitoring_error', {'error': str(e)})
+                break
+            
+            time.sleep(2)  # Update every 2 seconds
+    
+    # Start monitoring in a separate thread
+    monitor_thread = threading.Thread(target=monitor_cache)
+    monitor_thread.daemon = True
+    monitor_thread.start()
+    
+    emit('cache_monitoring_started', {'message': f'Cache monitoring started for {package_name}'})
+
+@socketio.on('stop_cache_monitoring')
+def handle_stop_cache_monitoring():
+    global cache_monitoring_active
+    cache_monitoring_active = False
+    emit('cache_monitoring_stopped', {'message': 'Cache monitoring stopped'})
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, host='0.0.0.0', port=5000)
