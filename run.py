@@ -10,8 +10,19 @@ import sys
 def main():
     print("🚀 Starting Cache Management Web Panel...")
     print("📱 Make sure your Android device is connected via ADB")
-    print("🌐 The web interface will be available at: http://localhost:5000")
-    print("⏹️  Press Ctrl+C to stop the server")
+    
+    # Get port from environment or use default
+    port = int(os.environ.get('PORT', 5000))
+    print(f"🌐 The web interface will be available at: http://localhost:{port}")
+    
+    # Check if running in production mode
+    debug_mode = os.environ.get('FLASK_ENV', 'development') != 'production'
+    
+    if not debug_mode:
+        print("🔒 Running in production mode")
+    else:
+        print("⏹️  Press Ctrl+C to stop the server")
+    
     print("-" * 50)
     
     # Check if we're in a virtual environment
@@ -22,7 +33,15 @@ def main():
     
     # Start the Flask application
     from app import app, socketio
-    socketio.run(app, debug=True, host='0.0.0.0', port=5000)
+    
+    # For production mode, allow unsafe werkzeug (required by Flask-SocketIO)
+    # Note: For true production, consider using gunicorn with gevent workers
+    if not debug_mode:
+        socketio.run(app, debug=False, host='0.0.0.0', port=port, 
+                    allow_unsafe_werkzeug=True)
+    else:
+        # Development mode - use Werkzeug with debug
+        socketio.run(app, debug=True, host='0.0.0.0', port=port)
 
 if __name__ == '__main__':
     main()
